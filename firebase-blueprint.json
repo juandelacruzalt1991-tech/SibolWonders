@@ -1,0 +1,130 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "A community member",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "moderator", "member"] },
+        "rewardPoints": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["displayName", "email", "role", "rewardPoints", "createdAt", "updatedAt"]
+    },
+    "story": {
+      "title": "Story",
+      "description": "A family story",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "content", "authorId", "imageUrl", "createdAt", "updatedAt"]
+    },
+    "resource": {
+      "title": "Resource",
+      "description": "A directory listing",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "contactInfo": { "type": "string" },
+        "location": { "type": "string" },
+        "category": { "type": "string", "enum": ["schools", "therapy", "ngos"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "description", "contactInfo", "location", "category", "createdAt", "updatedAt"]
+    },
+    "event": {
+      "title": "Event",
+      "description": "An upcoming event",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "registrationLink": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "date", "description", "createdAt", "updatedAt"]
+    },
+    "forum_topic": {
+      "title": "Forum Topic",
+      "description": "A discussion topic",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "description", "creatorId", "createdAt", "updatedAt"]
+    },
+    "forum_post": {
+      "title": "Forum Post",
+      "description": "A post in a topic",
+      "type": "object",
+      "properties": {
+        "topicId": { "type": "string" },
+        "content": { "type": "string" },
+        "authorId": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["topicId", "content", "authorId", "createdAt", "updatedAt"]
+    },
+    "message": {
+      "title": "Message",
+      "description": "A direct message between two users",
+      "type": "object",
+      "properties": {
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["senderId", "receiverId", "content", "createdAt"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User profiles"
+    },
+    "stories": {
+      "schema": { "$ref": "#/entities/story" },
+      "description": "Community stories"
+    },
+    "resources": {
+      "schema": { "$ref": "#/entities/resource" },
+      "description": "Resources directory"
+    },
+    "events": {
+      "schema": { "$ref": "#/entities/event" },
+      "description": "Events directory"
+    },
+    "forums": {
+      "schema": { "$ref": "#/entities/forum_topic" },
+      "description": "Forum topics"
+    },
+    "forums/{topicId}/posts": {
+      "schema": { "$ref": "#/entities/forum_post" },
+      "description": "Posts in a forum topic"
+    },
+    "messages": {
+      "schema": { "$ref": "#/entities/message" },
+      "description": "Direct messages"
+    }
+  }
+}

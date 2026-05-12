@@ -1,0 +1,223 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() { return request.auth != null; }
+    function getRole() {
+      let userPath = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(userPath) ? get(userPath).data.role : 'member';
+    }
+    function isAdmin() { return isSignedIn() && (exists(/databases/$(database)/documents/admins/$(request.auth.uid)) || request.auth.token.email == 'juandelacruz.alt1991@gmail.com' || getRole() == 'admin'); }
+    function isModerator() { return isSignedIn() && getRole() == 'moderator'; }
+    function isStaff() { return isAdmin() || isModerator(); }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['displayName', 'email', 'role', 'rewardPoints', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 7
+        && data.displayName is string && data.displayName.size() <= 100
+        && data.email is string && data.email.size() <= 200
+        && data.photoURL is string && data.photoURL.size() <= 1000
+        && data.role in ['admin', 'moderator', 'member']
+        && data.rewardPoints is number
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      // Only admins or the owner can create/update.
+      // But creating role 'admin' is blocked.
+      allow create: if isOwner(userId)
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().role == 'member'
+        && incoming().rewardPoints == 0;
+      
+      allow update: if (isOwner(userId)
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().updatedAt == request.time
+        && incoming().createdAt == existing().createdAt
+        && incoming().role == existing().role // can't escalate privileges
+        && incoming().rewardPoints == existing().rewardPoints // can't cheat reward points
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'updatedAt'])
+      ) || (isAdmin() 
+        && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().updatedAt == request.time
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt'])
+      );
+    }
+
+    function isValidStory(data) {
+      return data.keys().hasAll(['title', 'content', 'authorId', 'imageUrl', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 6
+        && data.title is string && data.title.size() <= 200
+        && data.content is string && data.content.size() <= 100000
+        && data.authorId is string && data.authorId.size() <= 128
+        && data.imageUrl is string && data.imageUrl.size() <= 1000000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /stories/{storyId} {
+      allow read: if true; // Public view
+      allow create: if isSignedIn()
+        && isValidId(storyId)
+        && isValidStory(incoming())
+        && incoming().authorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+        
+      allow update: if isSignedIn()
+        && isValidId(storyId)
+        && existing().authorId == request.auth.uid
+        && isValidStory(incoming())
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'imageUrl', 'updatedAt']);
+        
+      allow delete: if isSignedIn() && existing().authorId == request.auth.uid;
+    }
+
+    function isValidResource(data) {
+      return data.keys().hasAll(['name', 'description', 'contactInfo', 'location', 'category', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 7
+        && data.name is string && data.name.size() <= 200
+        && data.description is string && data.description.size() <= 10000
+        && data.contactInfo is string && data.contactInfo.size() <= 1000
+        && data.location is string && data.location.size() <= 1000
+        && data.category in ['schools', 'therapy', 'ngos']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /resources/{resourceId} {
+      allow read: if true;
+      allow create, update, delete: if isStaff();
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['name', 'date', 'description', 'registrationLink', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 6
+        && data.name is string && data.name.size() <= 200
+        && data.date is string && data.date.size() <= 100
+        && data.description is string && data.description.size() <= 10000
+        && data.registrationLink is string && data.registrationLink.size() <= 1000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    function isValidForumTopic(data) {
+      return data.keys().hasAll(['title', 'description', 'creatorId', 'createdAt', 'updatedAt'])
+        && data.keys().size() == 5
+        && data.title is string && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 10000
+        && data.creatorId is string && data.creatorId.size() <= 128
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    match /forums/{topicId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && isValidId(topicId)
+        && isValidForumTopic(incoming())
+        && incoming().creatorId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isSignedIn()
+        && isValidId(topicId)
+        && (existing().creatorId == request.auth.uid || isStaff())
+        && isValidForumTopic(incoming())
+        && incoming().creatorId == existing().creatorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'updatedAt']);
+      allow delete: if isSignedIn() && (existing().creatorId == request.auth.uid || isStaff());
+      
+      function isValidForumPost(data) {
+        return data.keys().hasAll(['topicId', 'content', 'authorId', 'createdAt', 'updatedAt'])
+          && data.keys().size() == 5
+          && data.topicId is string && data.topicId.size() <= 128
+          && data.content is string && data.content.size() <= 10000
+          && data.authorId is string && data.authorId.size() <= 128
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      match /posts/{postId} {
+        allow read: if isSignedIn() && existing().topicId == topicId;
+        allow list: if isSignedIn();
+        allow create: if isSignedIn()
+          && isValidId(topicId)
+          && isValidId(postId)
+          && isValidForumPost(incoming())
+          && incoming().topicId == topicId
+          && incoming().authorId == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isSignedIn()
+          && isValidId(topicId)
+          && isValidId(postId)
+          && (existing().authorId == request.auth.uid || isStaff())
+          && isValidForumPost(incoming())
+          && incoming().authorId == existing().authorId
+          && incoming().topicId == existing().topicId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['content', 'updatedAt']);
+        allow delete: if isSignedIn() && (existing().authorId == request.auth.uid || isStaff());
+      }
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['senderId', 'receiverId', 'content', 'createdAt'])
+        && data.keys().size() == 4
+        && data.senderId is string && data.senderId.size() <= 128
+        && data.receiverId is string && data.receiverId.size() <= 128
+        && data.content is string && data.content.size() <= 5000
+        && data.createdAt is timestamp;
+    }
+
+    match /messages/{messageId} {
+      allow read: if isSignedIn() && (existing().senderId == request.auth.uid || existing().receiverId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.receiverId == request.auth.uid);
+      allow create: if isSignedIn()
+        && isValidId(messageId)
+        && isValidMessage(incoming())
+        && incoming().senderId == request.auth.uid
+        && incoming().createdAt == request.time;
+    }
+    function isValidAppSetting(data) {
+      return data.keys().hasAll(['logoUrl', 'updatedAt', 'updatedBy'])
+        && data.keys().size() == 3
+        && data.logoUrl is string && data.logoUrl.size() <= 1000000
+        && data.updatedAt is timestamp
+        && data.updatedBy is string;
+    }
+
+    match /app_settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
